@@ -26,23 +26,16 @@ use Symfony\Component\HttpFoundation\Response;
 use Tests\Resources\DatabaseDump;
 
 /**
- * GET /customers/{customerId}/carts on a customer who really has a cart. The cart is created through
- * POST /carts (CreateEmptyCustomerCartCommand), so this class depends on the Cart resource and shares
- * its version gate.
+ * GET /customers/{customerId}/carts on a customer who really has a cart. The cart is created
+ * directly through the legacy Cart object because there is no Admin API cart-creation endpoint.
  */
 class CustomerCartsEndpointTest extends ApiTestCase
 {
     public static function setUpBeforeClass(): void
     {
-        if (self::isVersionUnder('9.2.0')) {
-            static::markTestSkipped('POST /carts requires PrestaShop >= 9.2.0, see Cart::VERSION_GATE');
-
-            return;
-        }
-
         parent::setUpBeforeClass();
         self::resetTables();
-        self::createApiClient(['cart_write', 'customer_read', 'customer_write']);
+        self::createApiClient(['customer_read', 'customer_write']);
     }
 
     public static function tearDownAfterClass(): void
@@ -81,13 +74,18 @@ class CustomerCartsEndpointTest extends ApiTestCase
 
         $this->assertSame([], $this->getItem('/customers/' . $customerId . '/carts', ['customer_read']));
 
-        $cart = $this->createItem('/carts', ['customerId' => $customerId], ['cart_write']);
+        $cart = new \Cart();
+        $cart->id_customer = $customerId;
+        $cart->id_currency = (int) \Configuration::get('PS_CURRENCY_DEFAULT');
+        $cart->id_lang = (int) \Configuration::get('PS_LANG_DEFAULT');
+        $cart->id_shop = 1;
+        $this->assertTrue($cart->add());
 
         // The cart never became an order, so the query lists it
         $carts = $this->getItem('/customers/' . $customerId . '/carts', ['customer_read']);
         $this->assertCount(1, $carts);
         $this->assertSame($customerId, $carts[0]['customerId']);
-        $this->assertSame($cart['cartId'], $carts[0]['cartId']);
+        $this->assertSame((int) $cart->id, $carts[0]['cartId']);
         $this->assertIsString($carts[0]['creationDate']);
         $this->assertIsString($carts[0]['totalPrice']);
     }
