@@ -38,6 +38,7 @@ use Symfony\Component\Validator\Constraints as Assert;
             requirements: ['customerId' => '\d+'],
             output: false,
             read: false,
+            input: CustomerPrivateNote::class,
             CQRSCommand: SetPrivateNoteAboutCustomerCommand::class,
             scopes: ['customer_write'],
         ),
